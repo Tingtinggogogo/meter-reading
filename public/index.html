@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>杭州商场每日水电用量抄表记录</title>
+  <style>
+    :root { --blue:#0058a3; --dark:#003b6f; --yellow:#ffda1a; --ink:#111; --muted:#667085; --line:#d0d5dd; --surface:#f5f5f5; --success:#16794a; --danger:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--surface); font-family:"Noto IKEA Simplified Chinese","Noto IKEA","Noto Sans SC","Microsoft YaHei",Arial,sans-serif; line-height:1.5; }
+    header { padding:24px 20px; color:#fff; background:var(--blue); }
+    header h1, header p { max-width:960px; margin-left:auto; margin-right:auto; }
+    header h1 { margin-top:0; margin-bottom:4px; font-size:clamp(24px,4vw,36px); }
+    header p { margin-top:0; margin-bottom:0; opacity:.88; }
+    main { max-width:1000px; margin:24px auto 56px; padding:0 16px; }
+    .card { margin-bottom:20px; padding:22px; background:#fff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.07); }
+    h2 { margin:0 0 16px; font-size:21px; }
+    h3 { margin:20px 0 10px; font-size:17px; }
+    .meta { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+    label { display:block; font-weight:700; }
+    .hint { display:block; margin-top:4px; color:var(--muted); font-size:13px; font-weight:400; }
+    input { width:100%; min-height:46px; margin-top:7px; padding:10px 12px; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:6px; font:inherit; }
+    input:focus { outline:3px solid rgba(0,88,163,.2); border-color:var(--blue); }
+    input[readonly] { color:#475467; background:#f2f4f7; }
+    .meter-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .meter { display:grid; grid-template-columns:1fr minmax(130px,42%); gap:12px; align-items:center; padding:12px 14px; background:#fffdf0; border:1px solid #ead16c; border-radius:8px; }
+    .meter input { margin:0; background:var(--yellow); border-color:#c5a900; font-weight:700; }
+    .meter-name { font-weight:700; }
+    .multiplier { color:var(--muted); font-size:13px; }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
+    button, .button { min-height:46px; padding:10px 18px; border:0; border-radius:24px; color:#fff; background:var(--blue); font:700 15px inherit; cursor:pointer; text-decoration:none; text-align:center; }
+    button:hover, .button:hover { background:var(--dark); }
+    button.secondary, .button.secondary { color:var(--blue); background:#fff; border:2px solid var(--blue); }
+    button.danger { color:var(--danger); background:#fff; border:2px solid var(--danger); }
+    button:disabled { cursor:wait; opacity:.55; }
+    .status { min-height:24px; margin-top:12px; font-weight:700; }
+    .status.ok { color:var(--success); }
+    .status.error { color:var(--danger); }
+    .history-head { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:end; }
+    .admin-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; min-width:min(100%,420px); }
+    .table-wrap { margin-top:16px; overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th, td { padding:10px; text-align:left; white-space:nowrap; border-bottom:1px solid #eaecf0; }
+    th { background:#f2f4f7; }
+    .empty { padding:24px; color:var(--muted); text-align:center; }
+    .storage-note { padding:14px; color:#344054; background:#eef6ff; border-left:4px solid var(--blue); }
+    @media (max-width:760px) {
+      header { padding:20px 16px; }
+      main { margin-top:16px; padding:0 10px; }
+      .card { padding:16px; border-radius:8px; }
+      .meta, .meter-grid, .admin-fields { grid-template-columns:1fr; }
+      .meter { grid-template-columns:1fr; gap:8px; }
+      .actions button, .actions .button { width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>杭州商场每日水电用量抄表记录</h1>
+    <p>Hangzhou Store Daily Meter Reading · STO401</p>
+  </header>
+  <main>
+    <form id="readingForm">
+      <section class="card">
+        <h2>基础信息</h2>
+        <div class="meta">
+          <label>站点<input id="site" value="STO401" readonly></label>
+          <label>服务器日期与时间<input id="readingTime" readonly value="正在同步…"></label>
+          <label>抄表人<input id="reader" maxlength="40" autocomplete="name" required placeholder="请输入姓名"></label>
+          <label>商场验证码<input id="submissionCode" type="password" minlength="8" autocomplete="current-password" required placeholder="请输入验证码"></label>
+        </div>
+      </section>
+      <section class="card">
+        <h2>1. 用电量</h2>
+        <h3>1.1 高压进线 <span class="multiplier">变倍 3000 · 输入表盘原始读数</span></h3>
+        <div class="meter-grid" id="highVoltage"></div>
+        <h3>1.2 光伏抄表 <span class="multiplier">变倍 6000 · 输入表盘原始读数</span></h3>
+        <div class="meter-grid" id="solar"></div>
+        <h3>1.3 电动车充电桩 <span class="multiplier">无变倍</span></h3>
+        <div class="meter-grid" id="charging"></div>
+      </section>
+      <section class="card">
+        <h2>2. 用水量 <span class="multiplier">单位：吨</span></h2>
+        <h3>2.1 生活及消防用水</h3>
+        <div class="meter-grid" id="water"></div>
+        <h3>2.2 中水</h3>
+        <div class="meter-grid" id="reclaimedWater"></div>
+        <div class="actions">
+          <button type="submit" id="saveButton">保存今日抄表数据</button>
+          <button type="button" class="secondary" id="resetButton">清空读数</button>
+        </div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </section>
+    </form>
+
+    <section class="card">
+      <div class="history-head">
+        <div>
+          <h2>管理员：历史记录与月度导出</h2>
+          <span class="hint">管理员密码不会保存到浏览器。</span>
+        </div>
+        <div class="admin-fields">
+          <label>选择月份<input type="month" id="exportMonth"></label>
+          <label>管理员密码<input type="password" id="adminPassword" autocomplete="current-password"></label>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="loadButton">查询记录</button>
+        <button type="button" id="exportButton">导出 Excel</button>
+        <button type="button" class="danger" id="clearMonthButton">删除所选月份数据</button>
+        <a class="button secondary" href="/api/qr.png" target="_blank" rel="noopener">打开本页二维码</a>
+      </div>
+      <div class="status" id="adminStatus" role="status" aria-live="polite"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>时间</th><th>抄表人</th><th>记录状态</th></tr></thead>
+          <tbody id="historyBody"><tr><td colspan="4" class="empty">请输入管理员密码后查询</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card storage-note">
+      <strong>集中存储：</strong>数据提交到服务器并保存在 PostgreSQL。再次提交同一天的数据会覆盖当天记录，月度导出按服务器中的最新记录生成。
+    </section>
+  </main>
+  <script>
+    const meters = [
+      { id:"boka", group:"highVoltage", label:"博卡线" },
+      { id:"huaman", group:"highVoltage", label:"花漫线" },
+      { id:"solar1", group:"solar", label:"一号并网柜" },
+      { id:"solar2", group:"solar", label:"二号并网柜" },
+      { id:"solar3", group:"solar", label:"三号并网柜" },
+      { id:"solar4", group:"solar", label:"四号并网柜" },
+      { id:"charger1", group:"charging", label:"1AA9-7" },
+      { id:"charger2", group:"charging", label:"3AA4-6" },
+      { id:"charger3", group:"charging", label:"4AA4-5" },
+      { id:"domestic_water", group:"water", label:"生活水表" },
+      { id:"domestic_water_electronic", group:"water", label:"生活水表（电子表）" },
+      { id:"fire_east", group:"water", label:"消防东表" },
+      { id:"fire_east_electronic", group:"water", label:"消防东表（电子表）" },
+      { id:"fire_west", group:"water", label:"消防西表" },
+      { id:"fire_west_electronic", group:"water", label:"消防西表（电子表）" },
+      { id:"reclaimed_total", group:"reclaimedWater", label:"总水" },
+      { id:"reclaimed_in", group:"reclaimedWater", label:"进水" },
+      { id:"reclaimed_out", group:"reclaimedWater", label:"出水" }
+    ];
+    const pad = value => String(value).padStart(2,"0");
+    const monthNow = () => { const date=new Date(); return `${date.getFullYear()}-${pad(date.getMonth()+1)}`; };
+    const escapeHtml = value => { const node=document.createElement("div"); node.textContent=value; return node.innerHTML; };
+
+    meters.forEach(meter => {
+      const label=document.createElement("label");
+      label.className="meter";
+      label.innerHTML=`<span><span class="meter-name">${meter.label}</span><span class="hint">需填写抄表数据</span></span><input id="${meter.id}" type="number" min="0" max="1000000000000000" step="any" inputmode="decimal" required aria-label="${meter.label}抄表数据">`;
+      document.getElementById(meter.group).appendChild(label);
+    });
+
+    const form=document.getElementById("readingForm");
+    const statusNode=document.getElementById("status");
+    const adminStatus=document.getElementById("adminStatus");
+    const monthInput=document.getElementById("exportMonth");
+    monthInput.value=monthNow();
+
+    function setStatus(node,message,isError=false) {
+      node.textContent=message;
+      node.className=`status ${isError?"error":"ok"}`;
+    }
+
+    async function api(path,options={}) {
+      const response=await fetch(path,options);
+      const contentType=response.headers.get("content-type") || "";
+      const body=contentType.includes("application/json") ? await response.json() : null;
+      if (!response.ok) throw new Error(body?.detail || `请求失败（${response.status}）`);
+      return { response, body };
+    }
+
+    async function syncConfig() {
+      try {
+        const {body}=await api("/api/config");
+        document.getElementById("site").value=body.site;
+        document.getElementById("readingTime").value=body.serverTime.replace("T"," ");
+      } catch (error) {
+        document.getElementById("readingTime").value="服务器连接失败";
+        setStatus(statusNode,error.message,true);
+      }
+    }
+
+    form.addEventListener("submit",async event => {
+      event.preventDefault();
+      const button=document.getElementById("saveButton");
+      button.disabled=true;
+      try {
+        const values=Object.fromEntries(meters.map(meter=>[meter.id,document.getElementById(meter.id).value]));
+        const {body}=await api("/api/readings",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","X-Submission-Code":document.getElementById("submissionCode").value},
+          body:JSON.stringify({reader:document.getElementById("reader").value,values})
+        });
+        setStatus(statusNode,`${body.date} ${body.time} 的抄表数据已保存到服务器。`);
+        await syncConfig();
+      } catch (error) {
+        setStatus(statusNode,error.message,true);
+      } finally {
+        button.disabled=false;
+      }
+    });
+
+    document.getElementById("resetButton").addEventListener("click",()=>{
+      meters.forEach(meter=>{ document.getElementById(meter.id).value=""; });
+      setStatus(statusNode,"");
+    });
+
+    function adminHeaders() {
+      return {"X-Admin-Password":document.getElementById("adminPassword").value};
+    }
+
+    async function loadHistory() {
+      try {
+        const {body}=await api(`/api/readings?month=${encodeURIComponent(monthInput.value)}`,{headers:adminHeaders()});
+        document.getElementById("historyBody").innerHTML=body.records.length
+          ? body.records.map(record=>`<tr><td>${record.date}</td><td>${record.time}</td><td>${escapeHtml(record.reader)}</td><td>已保存</td></tr>`).join("")
+          : `<tr><td colspan="4" class="empty">该月份暂无记录</td></tr>`;
+        setStatus(adminStatus,`共查询到 ${body.records.length} 条记录。`);
+      } catch (error) {
+        setStatus(adminStatus,error.message,true);
+      }
+    }
+    document.getElementById("loadButton").addEventListener("click",loadHistory);
+
+    document.getElementById("exportButton").addEventListener("click",async()=>{
+      try {
+        const {response}=await api(`/api/export?month=${encodeURIComponent(monthInput.value)}`,{headers:adminHeaders()});
+        const blob=await response.blob();
+        const link=document.createElement("a");
+        link.href=URL.createObjectURL(blob);
+        link.download=`杭州商场每日水电用量抄表_${monthInput.value}.xlsx`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        setStatus(adminStatus,"Excel 报表已生成。");
+      } catch (error) {
+        setStatus(adminStatus,error.message,true);
+      }
+    });
+
+    document.getElementById("clearMonthButton").addEventListener("click",async()=>{
+      const month=monthInput.value;
+      if (!confirm(`确定删除 ${month} 的全部记录吗？此操作无法撤销。`)) return;
+      try {
+        const {body}=await api(`/api/readings?month=${encodeURIComponent(month)}`,{method:"DELETE",headers:adminHeaders()});
+        setStatus(adminStatus,`已删除 ${body.deleted} 条记录。`);
+        await loadHistory();
+      } catch (error) {
+        setStatus(adminStatus,error.message,true);
+      }
+    });
+
+    syncConfig();
+  </script>
+</body>
+</html>
