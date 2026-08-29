@@ -18,6 +18,7 @@ import xlsxwriter
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SITE = "STO401"
@@ -117,7 +118,7 @@ def month_bounds(month: str) -> tuple[str, str]:
 
 
 def connect() -> psycopg.Connection:
-    return psycopg.connect(get_database_url(), connect_timeout=10)
+    return psycopg.connect(get_database_url(), connect_timeout=10, row_factory=dict_row)
 
 
 def initialize_database() -> None:
@@ -159,12 +160,12 @@ def fetch_month(month: str) -> list[dict]:
         ).fetchall()
     result = []
     for row in rows:
-        values = {key: row[index + 3] for index, key in enumerate(METER_KEYS)}
+        values = {key: row[key] for key in METER_KEYS}
         result.append(
             {
-                "date": row[0].isoformat(),
-                "time": row[1].astimezone(TIME_ZONE).strftime("%H:%M"),
-                "reader": row[2],
+                "date": row["reading_date"].isoformat(),
+                "time": row["recorded_at"].astimezone(TIME_ZONE).strftime("%H:%M"),
+                "reader": row["reader"],
                 "values": values,
             }
         )

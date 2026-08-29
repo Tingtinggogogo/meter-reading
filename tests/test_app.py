@@ -1,3 +1,4 @@
+from datetime import date, datetime, timezone
 from io import BytesIO
 from decimal import Decimal
 from pathlib import Path
@@ -7,7 +8,7 @@ import pytest
 from openpyxl import load_workbook
 from pydantic import ValidationError
 
-from app.main import METER_KEYS, ReadingPayload, build_workbook, month_bounds, validate_settings
+from app.main import METER_KEYS, ReadingPayload, build_workbook, fetch_month, month_bounds, validate_settings
 
 
 def sample_record(day: int, factor: int = 1) -> dict:
@@ -43,6 +44,40 @@ def test_frontend_contains_every_backend_meter():
     html = (Path(__file__).parents[1] / "public" / "index.html").read_text(encoding="utf-8")
     frontend_keys = tuple(re.findall(r'\{ id:"([^"]+)", group:', html))
     assert frontend_keys == METER_KEYS
+
+
+def test_fetch_month_serializes_a_populated_result(monkeypatch):
+    row = {
+        "reading_date": date(2026, 8, 29),
+        "recorded_at": datetime(2026, 8, 29, 8, 38, tzinfo=timezone.utc),
+        "reader": "刘婷婷",
+        **{key: Decimal(index) for index, key in enumerate(METER_KEYS, 1)},
+    }
+
+    class Result:
+        def fetchall(self):
+            return [row]
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        def execute(self, *_):
+            return Result()
+
+    monkeypatch.setattr("app.main.connect", lambda: Connection())
+
+    records = fetch_month("2026-08")
+
+    assert records == [{
+        "date": "2026-08-29",
+        "time": "16:38",
+        "reader": "刘婷婷",
+        "values": {key: Decimal(index) for index, key in enumerate(METER_KEYS, 1)},
+    }]
 
 
 def test_month_bounds_handles_december():
