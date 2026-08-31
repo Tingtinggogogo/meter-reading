@@ -61,6 +61,8 @@ def test_frontend_contains_every_backend_meter():
     assert ".month-control { position:relative; display:block; width:100%; height:46px;" in html
     assert "text-align:center; text-align-last:center;" in html
     assert "populateMonthOptions(body.exportMonths);" in html
+    assert '1. 用电量 <span class="multiplier">单位：千瓦时</span>' in html
+    assert '1.3 电动车充电桩 <span class="multiplier">无变倍 · 输入表盘原始读数</span>' in html
 
 
 def test_meter_multipliers_match_business_rules():
