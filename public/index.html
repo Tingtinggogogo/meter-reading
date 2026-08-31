@@ -230,12 +230,20 @@
       try {
         const {response}=await api(`/api/export?month=${encodeURIComponent(monthInput.value)}`,{headers:adminHeaders()});
         const blob=await response.blob();
+        const filename=`杭州商场每日水电用量抄表_${monthInput.value}.xlsx`;
+        const objectUrl=URL.createObjectURL(blob);
         const link=document.createElement("a");
-        link.href=URL.createObjectURL(blob);
-        link.download=`杭州商场每日水电用量抄表_${monthInput.value}.xlsx`;
+        link.href=objectUrl;
+        link.download=filename;
+        link.rel="noopener";
+        link.style.display="none";
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(link.href);
-        setStatus(adminStatus,"Excel 报表已生成。");
+        setTimeout(()=>{
+          if(link.parentNode){link.parentNode.removeChild(link);}
+          URL.revokeObjectURL(objectUrl);
+        },60000);
+        setStatus(adminStatus,"Excel 报表已生成，若未自动下载请检查浏览器下载权限。");
       } catch (error) {
         setStatus(adminStatus,error.message,true);
       }

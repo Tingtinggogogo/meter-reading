@@ -216,8 +216,11 @@ def build_workbook(records: list[dict]) -> bytes:
     for row_index, record in enumerate(records, 3):
         sheet.set_row(row_index, 27.75)
         sheet.write(row_index, 0, record["date"], data)
-        for column, (key, _, _) in enumerate(METERS, 1):
-            sheet.write_number(row_index, column, float(record["values"][key]), data)
+        for column, (key, _, multiplier) in enumerate(METERS, 1):
+            reading = Decimal(str(record["values"][key]))
+            if multiplier is not None:
+                reading *= multiplier
+            sheet.write_number(row_index, column, float(reading), data)
         sheet.write(row_index, 19, record["reader"], data)
 
     data_end_row = max(25, len(records) + 3)
@@ -226,8 +229,7 @@ def build_workbook(records: list[dict]) -> bytes:
     sheet.write(total_row, 0, "单项合计", total)
     for column, (key, _, multiplier) in enumerate(METERS, 1):
         excel_column = xlsxwriter.utility.xl_col_to_name(column)
-        base_formula = f"SUM({excel_column}4:{excel_column}{data_end_row})"
-        formula = base_formula if multiplier is None else f"{base_formula}*{multiplier}"
+        formula = f"SUM({excel_column}4:{excel_column}{data_end_row})"
         value = sum(Decimal(str(record["values"][key])) for record in records)
         if multiplier is not None:
             value *= multiplier
@@ -328,9 +330,21 @@ def export_readings(month: Annotated[str, Query()]) -> StreamingResponse:
     )
 
 
+def resolve_public_url(request: Request) -> str:
+    configured = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
+    host = forwarded_host or request.headers.get("host", "").strip()
+    if not host:
+        return str(request.base_url).rstrip("/")
+    return f"{forwarded_proto or request.url.scheme}://{host}"
+
+
 @app.get("/api/qr.png")
 def qr_code(request: Request) -> Response:
-    url = os.getenv("PUBLIC_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
+    url = resolve_public_url(request)
     image = qrcode.make(url)
     output = io.BytesIO()
     image.save(output, format="PNG")
