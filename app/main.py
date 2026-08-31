@@ -9,14 +9,13 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from zoneinfo import ZoneInfo
 
 import psycopg
 import qrcode
 import xlsxwriter
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -316,36 +315,64 @@ def delete_readings(month: Annotated[str, Query()]) -> dict:
     return {"deleted": deleted}
 
 
-@app.get("/api/export", dependencies=[Depends(require_admin)])
-def export_readings(month: Annotated[str, Query()]) -> StreamingResponse:
+def build_export_response(month: str) -> Response:
     records = fetch_month(month)
     if not records:
         raise HTTPException(status_code=404, detail="所选月份没有记录")
+    content = build_workbook(records)
     filename = f"杭州商场每日水电用量抄表_{month}.xlsx"
-    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
-    return StreamingResponse(
-        io.BytesIO(build_workbook(records)),
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="meter-reading-{month}.xlsx"; '
+            f"filename*=UTF-8''{quote(filename)}"
+        ),
+        "Content-Length": str(len(content)),
+    }
+    return Response(
+        content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
     )
 
 
+@app.get("/api/export", dependencies=[Depends(require_admin)])
+def export_readings(month: Annotated[str, Query()]) -> Response:
+    return build_export_response(month)
+
+
+@app.post("/api/export")
+def export_readings_from_form(
+    month: Annotated[str, Form()],
+    admin_password: Annotated[str, Form()],
+) -> Response:
+    verify_secret(admin_password, "ADMIN_PASSWORD")
+    return build_export_response(month)
+
+
 def resolve_public_url(request: Request) -> str:
-    configured = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
-    if configured:
-        return configured
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
     forwarded_host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
     host = forwarded_host or request.headers.get("host", "").strip()
-    if not host:
-        return str(request.base_url).rstrip("/")
-    return f"{forwarded_proto or request.url.scheme}://{host}"
+    if host and re.fullmatch(r"[A-Za-z0-9.:[\]-]+", host):
+        hostname = urlsplit(f"//{host}").hostname or ""
+        is_local = hostname in {"localhost", "127.0.0.1", "::1"} or hostname.endswith(".local")
+        scheme = request.url.scheme if is_local else "https"
+        return f"{scheme}://{host}"
+
+    configured = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
+    return configured or str(request.base_url).rstrip("/")
 
 
 @app.get("/api/qr.png")
 def qr_code(request: Request) -> Response:
     url = resolve_public_url(request)
-    image = qrcode.make(url)
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white")
     output = io.BytesIO()
     image.save(output, format="PNG")
     return Response(output.getvalue(), media_type="image/png", headers={"Content-Disposition": "inline; filename=meter-reading-qr.png"})

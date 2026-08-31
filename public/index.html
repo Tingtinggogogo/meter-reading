@@ -227,25 +227,34 @@
     document.getElementById("loadButton").addEventListener("click",loadHistory);
 
     document.getElementById("exportButton").addEventListener("click",async()=>{
+      const button=document.getElementById("exportButton");
+      button.disabled=true;
       try {
-        const {response}=await api(`/api/export?month=${encodeURIComponent(monthInput.value)}`,{headers:adminHeaders()});
-        const blob=await response.blob();
-        const filename=`杭州商场每日水电用量抄表_${monthInput.value}.xlsx`;
-        const objectUrl=URL.createObjectURL(blob);
-        const link=document.createElement("a");
-        link.href=objectUrl;
-        link.download=filename;
-        link.rel="noopener";
-        link.style.display="none";
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(()=>{
-          if(link.parentNode){link.parentNode.removeChild(link);}
-          URL.revokeObjectURL(objectUrl);
-        },60000);
-        setStatus(adminStatus,"Excel 报表已生成，若未自动下载请检查浏览器下载权限。");
+        const {body}=await api(`/api/readings?month=${encodeURIComponent(monthInput.value)}`,{headers:adminHeaders()});
+        if (!body.records.length) throw new Error("所选月份没有记录");
+
+        const form=document.createElement("form");
+        form.method="post";
+        form.action="/api/export";
+        form.style.display="none";
+        [
+          ["month",monthInput.value],
+          ["admin_password",document.getElementById("adminPassword").value]
+        ].forEach(([name,value])=>{
+          const input=document.createElement("input");
+          input.type="hidden";
+          input.name=name;
+          input.value=value;
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+        setStatus(adminStatus,"Excel 报表已生成，浏览器正在下载。");
       } catch (error) {
         setStatus(adminStatus,error.message,true);
+      } finally {
+        button.disabled=false;
       }
     });
 

@@ -8,8 +8,9 @@
 - 同一站点每天仅保留一条记录，再次提交自动更新
 - 填写端使用商场验证码，管理员端使用独立密码
 - 管理员按月份查询、删除和导出 Excel
-- Excel 匹配业务模板，使用 `Noto IKEA Simplified Chinese`，保留 3000/6000 倍率合计公式及显示结果
-- `/api/qr.png` 自动生成当前网站二维码
+- Excel 匹配业务模板，高压进线明细乘以 3000、光伏明细乘以 6000 后导出
+- Excel 使用浏览器原生附件下载，兼容 Android、鸿蒙和 iOS
+- `/api/qr.png` 自动生成当前公网 HTTPS 网站二维码
 - `/api/health` 提供 Zeabur 健康检查
 
 ## 项目结构
@@ -45,7 +46,7 @@
 | `DATABASE_URL` | 是 | 引用 PostgreSQL 服务暴露的连接字符串；在变量输入框选择数据库服务提供的连接变量 |
 | `SUBMISSION_CODE` | 是 | 第三方填写时使用的商场验证码，至少 8 位 |
 | `ADMIN_PASSWORD` | 是 | 查询、删除和导出使用的管理员密码，至少 8 位且不能与填写验证码相同 |
-| `PUBLIC_URL` | 建议 | 最终 HTTPS 地址，例如 `https://meter.example.com`，用于生成二维码 |
+| `PUBLIC_URL` | 否 | 无法从请求取得域名时的二维码备用 HTTPS 地址，例如 `https://meter.example.com` |
 | `PORT` | 否 | Zeabur 自动注入；Dockerfile 默认使用 `8080` |
 
 不要把真实密码或数据库连接字符串写入 GitHub。
@@ -54,7 +55,7 @@
 
 1. 打开 Web 服务的 **Networking / Domains**。
 2. 先生成 Zeabur 提供的 HTTPS 域名进行测试。
-3. 正式使用时绑定自有域名，并将 `PUBLIC_URL` 改为该地址。
+3. 正式使用时绑定自有 HTTPS 域名；服务会优先用当前访问域名生成二维码。
 4. 打开 `/api/qr.png`，保存二维码后打印张贴。
 
 ### 4. 发布检查

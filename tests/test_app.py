@@ -5,10 +5,21 @@ from pathlib import Path
 import re
 
 import pytest
+from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from pydantic import ValidationError
+from starlette.requests import Request
 
-from app.main import METER_KEYS, ReadingPayload, build_workbook, fetch_month, month_bounds, validate_settings
+from app import main as main_module
+from app.main import (
+    METER_KEYS,
+    ReadingPayload,
+    build_workbook,
+    fetch_month,
+    month_bounds,
+    resolve_public_url,
+    validate_settings,
+)
 
 
 def sample_record(day: int, factor: int = 1) -> dict:
@@ -93,8 +104,12 @@ def test_export_matches_template_and_keeps_formula_results():
     assert formulas.max_column == 20
     assert formulas["A1"].value == "每日水电用量抄表记录"
     assert formulas["D3"].value == "一号并网柜"
-    assert formulas["B26"].value == "=SUM(B4:B25)*3000"
-    assert formulas["D26"].value == "=SUM(D4:D25)*6000"
+    assert formulas["B4"].value == 3000
+    assert formulas["D4"].value == 18000
+    assert formulas["H4"].value == 7
+    assert formulas["K4"].value == 10
+    assert formulas["B26"].value == "=SUM(B4:B25)"
+    assert formulas["D26"].value == "=SUM(D4:D25)"
     assert formulas["K26"].value == "=SUM(K4:K25)"
     assert values["B26"].value == 9000
     assert values["D26"].value == 54000
@@ -103,3 +118,52 @@ def test_export_matches_template_and_keeps_formula_results():
     assert {str(item) for item in formulas.merged_cells.ranges} == {
         "A1:S1", "A2:A3", "B2:C2", "D2:G2", "H2:J2", "K2:P2", "Q2:S2", "T2:T3"
     }
+
+
+def test_public_url_uses_current_public_https_host(monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "http://old-internal-host:8080")
+    request = Request({
+        "type": "http",
+        "scheme": "http",
+        "path": "/api/qr.png",
+        "query_string": b"",
+        "headers": [(b"host", b"meter.example.com")],
+        "server": ("internal-service", 8080),
+    })
+
+    assert resolve_public_url(request) == "https://meter.example.com"
+
+
+def test_public_url_honors_forwarded_host():
+    request = Request({
+        "type": "http",
+        "scheme": "http",
+        "path": "/api/qr.png",
+        "query_string": b"",
+        "headers": [
+            (b"host", b"internal-service:8080"),
+            (b"x-forwarded-host", b"meter.example.com"),
+        ],
+        "server": ("internal-service", 8080),
+    })
+
+    assert resolve_public_url(request) == "https://meter.example.com"
+
+
+def test_native_form_export_returns_mobile_friendly_attachment(monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin-secret")
+    monkeypatch.setattr(main_module, "fetch_month", lambda _: [sample_record(1)])
+
+    response = TestClient(main_module.app).post(
+        "/api/export",
+        data={"month": "2026-08", "admin_password": "admin-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert 'filename="meter-reading-2026-08.xlsx"' in response.headers["content-disposition"]
+    assert "filename*=UTF-8''" in response.headers["content-disposition"]
+    assert int(response.headers["content-length"]) == len(response.content)
+    assert load_workbook(BytesIO(response.content), data_only=True)["每日抄表"]["B4"].value == 3000
