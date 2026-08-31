@@ -55,8 +55,9 @@ def test_frontend_contains_every_backend_meter():
     html = (Path(__file__).parents[1] / "public" / "index.html").read_text(encoding="utf-8")
     frontend_keys = tuple(re.findall(r'\{ id:"([^"]+)", group:', html))
     assert frontend_keys == METER_KEYS
-    assert ".admin-fields label, .admin-fields input { min-width:0; max-width:100%; }" in html
-    assert "grid-template-columns:minmax(0,1fr); width:100%;" in html
+    assert '<span class="month-control"><input type="month" id="exportMonth"></span>' in html
+    assert ".month-control { position:relative; display:block; width:100%; height:46px;" in html
+    assert "width:100% !important; min-width:100% !important; max-width:100% !important;" in html
 
 
 def test_fetch_month_serializes_a_populated_result(monkeypatch):
