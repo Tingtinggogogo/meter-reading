@@ -13,6 +13,7 @@ from starlette.requests import Request
 from app import main as main_module
 from app.main import (
     METER_KEYS,
+    METERS,
     ReadingPayload,
     build_workbook,
     export_month_options,
@@ -60,6 +61,14 @@ def test_frontend_contains_every_backend_meter():
     assert ".month-control { position:relative; display:block; width:100%; height:46px;" in html
     assert "text-align:center; text-align-last:center;" in html
     assert "populateMonthOptions(body.exportMonths);" in html
+
+
+def test_meter_multipliers_match_business_rules():
+    multipliers = {key: multiplier for key, _, multiplier in METERS}
+
+    assert multipliers["boka"] == multipliers["huaman"] == 3000
+    assert {multipliers[f"solar{index}"] for index in range(1, 5)} == {60}
+    assert {multipliers[f"charger{index}"] for index in range(1, 4)} == {1}
 
 
 def test_fetch_month_serializes_a_populated_result(monkeypatch):
@@ -120,14 +129,14 @@ def test_export_matches_template_and_keeps_formula_results():
     assert formulas["A1"].value == "每日水电用量抄表记录"
     assert formulas["D3"].value == "一号并网柜"
     assert formulas["B4"].value == 3000
-    assert formulas["D4"].value == 18000
+    assert formulas["D4"].value == 180
     assert formulas["H4"].value == 7
     assert formulas["K4"].value == 10
     assert formulas["B26"].value == "=SUM(B4:B25)"
     assert formulas["D26"].value == "=SUM(D4:D25)"
     assert formulas["K26"].value == "=SUM(K4:K25)"
     assert values["B26"].value == 9000
-    assert values["D26"].value == 54000
+    assert values["D26"].value == 540
     assert values["K26"].value == 30
     assert formulas["A1"].font.name == "Noto IKEA Simplified Chinese"
     assert {str(item) for item in formulas.merged_cells.ranges} == {
