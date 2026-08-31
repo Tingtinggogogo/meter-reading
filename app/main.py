@@ -16,6 +16,7 @@ import psycopg
 import qrcode
 import xlsxwriter
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Query, Request, Response, status
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -376,6 +377,35 @@ def qr_code(request: Request) -> Response:
     output = io.BytesIO()
     image.save(output, format="PNG")
     return Response(output.getvalue(), media_type="image/png", headers={"Content-Disposition": "inline; filename=meter-reading-qr.png"})
+
+
+@app.get("/qr", response_class=HTMLResponse)
+def qr_page() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>杭州商场每日抄表二维码</title>
+  <style>
+    body { margin:0; color:#111; background:#f5f5f5; font-family:"Microsoft YaHei",Arial,sans-serif; text-align:center; }
+    main { max-width:560px; margin:32px auto; padding:28px; background:#fff; border-radius:16px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+    h1 { margin:0 0 12px; font-size:26px; }
+    img { display:block; width:min(100%,360px); height:auto; margin:20px auto; }
+    .primary { color:#b42318; font-size:21px; font-weight:700; }
+    .hint { color:#475467; font-size:16px; }
+    @media print { body { background:#fff; } main { margin:0 auto; box-shadow:none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>杭州商场每日水电用量抄表</h1>
+    <img src="/api/qr.png" alt="抄表网页二维码">
+    <p class="primary">请使用手机系统相机扫码</p>
+    <p class="hint">小米、红米请勿使用微信“扫一扫”，扫码后使用系统浏览器打开。</p>
+  </main>
+</body>
+</html>"""
 
 
 app.mount("/", StaticFiles(directory=ROOT / "public", html=True), name="static")

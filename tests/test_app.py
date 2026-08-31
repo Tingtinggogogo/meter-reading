@@ -167,3 +167,12 @@ def test_native_form_export_returns_mobile_friendly_attachment(monkeypatch):
     assert "filename*=UTF-8''" in response.headers["content-disposition"]
     assert int(response.headers["content-length"]) == len(response.content)
     assert load_workbook(BytesIO(response.content), data_only=True)["每日抄表"]["B4"].value == 3000
+
+
+def test_qr_print_page_instructs_xiaomi_users_to_use_system_camera():
+    response = TestClient(main_module.app).get("/qr")
+
+    assert response.status_code == 200
+    assert '<img src="/api/qr.png"' in response.text
+    assert "请使用手机系统相机扫码" in response.text
+    assert "请勿使用微信" in response.text
