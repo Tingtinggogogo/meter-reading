@@ -15,6 +15,7 @@ from app.main import (
     METER_KEYS,
     ReadingPayload,
     build_workbook,
+    export_month_options,
     fetch_month,
     month_bounds,
     resolve_public_url,
@@ -55,11 +56,10 @@ def test_frontend_contains_every_backend_meter():
     html = (Path(__file__).parents[1] / "public" / "index.html").read_text(encoding="utf-8")
     frontend_keys = tuple(re.findall(r'\{ id:"([^"]+)", group:', html))
     assert frontend_keys == METER_KEYS
-    assert '<select id="exportMonth" aria-label="选择月份"></select>' in html
+    assert '<select id="exportMonth" aria-label="选择月份">' in html
     assert ".month-control { position:relative; display:block; width:100%; height:46px;" in html
     assert "text-align:center; text-align-last:center;" in html
-    assert 'const firstExportMonth = "2026-08";' in html
-    assert "populateMonthOptions(body.serverTime.slice(0,7));" in html
+    assert "populateMonthOptions(body.exportMonths);" in html
 
 
 def test_fetch_month_serializes_a_populated_result(monkeypatch):
@@ -99,6 +99,16 @@ def test_fetch_month_serializes_a_populated_result(monkeypatch):
 def test_month_bounds_handles_december():
     assert month_bounds("2026-08") == ("2026-08-01", "2026-09-01")
     assert month_bounds("2026-12") == ("2026-12-01", "2027-01-01")
+
+
+def test_export_months_include_history_and_exclude_future():
+    months = export_month_options(datetime(2026, 8, 31, tzinfo=timezone.utc))
+
+    assert months[:2] == ["2026-08", "2026-07"]
+    assert "2026-01" in months
+    assert "2025-12" in months
+    assert "2026-09" not in months
+    assert months[-1] == "1900-01"
 
 
 def test_export_matches_template_and_keeps_formula_results():

@@ -52,6 +52,7 @@ METERS = (
 METER_KEYS = tuple(item[0] for item in METERS)
 MAX_READING = Decimal("1000000000000000")
 DOWNLOAD_TICKET_TTL_SECONDS = 120
+EARLIEST_EXPORT_YEAR = 1900
 
 
 class ReadingPayload(BaseModel):
@@ -119,6 +120,20 @@ def month_bounds(month: str) -> tuple[str, str]:
     year, value = map(int, month.split("-"))
     next_month = f"{year + (value == 12):04d}-{1 if value == 12 else value + 1:02d}-01"
     return f"{month}-01", next_month
+
+
+def export_month_options(now: datetime | None = None) -> list[str]:
+    current = now or datetime.now(TIME_ZONE)
+    year = current.year
+    month = current.month
+    result = []
+    while year >= EARLIEST_EXPORT_YEAR:
+        result.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return result
 
 
 def connect() -> psycopg.Connection:
@@ -277,7 +292,11 @@ def health() -> dict:
 @app.get("/api/config")
 def config() -> dict:
     now = datetime.now(TIME_ZONE)
-    return {"site": SITE, "serverTime": now.isoformat(timespec="minutes")}
+    return {
+        "site": SITE,
+        "serverTime": now.isoformat(timespec="minutes"),
+        "exportMonths": export_month_options(now),
+    }
 
 
 @app.post("/api/readings")

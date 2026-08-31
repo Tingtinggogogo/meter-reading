@@ -105,7 +105,7 @@
           <span class="hint">管理员密码不会保存到浏览器。</span>
         </div>
         <div class="admin-fields">
-          <label>选择月份<span class="month-control"><select id="exportMonth" aria-label="选择月份"></select></span></label>
+          <label>选择月份<span class="month-control"><select id="exportMonth" aria-label="选择月份"><option value="">正在加载月份…</option></select></span></label>
           <label>管理员密码<input type="password" id="adminPassword" autocomplete="current-password"></label>
         </div>
       </div>
@@ -150,8 +150,6 @@
       { id:"reclaimed_out", group:"reclaimedWater", label:"出水" }
     ];
     const pad = value => String(value).padStart(2,"0");
-    const monthNow = () => { const date=new Date(); return `${date.getFullYear()}-${pad(date.getMonth()+1)}`; };
-    const firstExportMonth = "2026-08";
     const escapeHtml = value => { const node=document.createElement("div"); node.textContent=value; return node.innerHTML; };
 
     meters.forEach(meter => {
@@ -166,28 +164,18 @@
     const adminStatus=document.getElementById("adminStatus");
     const monthInput=document.getElementById("exportMonth");
 
-    function populateMonthOptions(lastMonth) {
+    function populateMonthOptions(months) {
       const previous=monthInput.value;
-      const [firstYear,firstMonth]=firstExportMonth.split("-").map(Number);
-      const [lastYear,lastMonthNumber]=lastMonth.split("-").map(Number);
-      let year=firstYear;
-      let month=firstMonth;
       monthInput.replaceChildren();
-      while (year < lastYear || (year === lastYear && month <= lastMonthNumber)) {
-        const value=`${year}-${pad(month)}`;
+      months.forEach(value=>{
+        const [year,month]=value.split("-").map(Number);
         const option=document.createElement("option");
         option.value=value;
         option.textContent=`${year}年${month}月`;
         monthInput.appendChild(option);
-        month+=1;
-        if (month === 13) {
-          month=1;
-          year+=1;
-        }
-      }
-      monthInput.value=previous >= firstExportMonth && previous <= lastMonth ? previous : lastMonth;
+      });
+      monthInput.value=months.includes(previous) ? previous : months[0];
     }
-    populateMonthOptions(monthNow());
 
     function setStatus(node,message,isError=false) {
       node.textContent=message;
@@ -207,7 +195,7 @@
         const {body}=await api("/api/config");
         document.getElementById("site").value=body.site;
         document.getElementById("readingTime").value=body.serverTime.replace("T"," ");
-        populateMonthOptions(body.serverTime.slice(0,7));
+        populateMonthOptions(body.exportMonths);
       } catch (error) {
         document.getElementById("readingTime").value="服务器连接失败";
         setStatus(statusNode,error.message,true);
