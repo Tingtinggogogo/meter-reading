@@ -37,7 +37,8 @@
     .status.ok { color:var(--success); }
     .status.error { color:var(--danger); }
     .history-head { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:end; }
-    .admin-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; min-width:min(100%,420px); }
+    .admin-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; width:min(100%,420px); min-width:0; }
+    .admin-fields label, .admin-fields input { min-width:0; max-width:100%; }
     .table-wrap { margin-top:16px; overflow-x:auto; }
     table { width:100%; border-collapse:collapse; font-size:14px; }
     th, td { padding:10px; text-align:left; white-space:nowrap; border-bottom:1px solid #eaecf0; }
@@ -48,7 +49,7 @@
       header { padding:20px 16px; }
       main { margin-top:16px; padding:0 10px; }
       .card { padding:16px; border-radius:8px; }
-      .meta, .meter-grid, .admin-fields { grid-template-columns:1fr; }
+      .meta, .meter-grid, .admin-fields { grid-template-columns:minmax(0,1fr); width:100%; }
       .meter { grid-template-columns:1fr; gap:8px; }
       .actions button, .actions .button { width:100%; }
     }
