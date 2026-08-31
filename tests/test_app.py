@@ -55,9 +55,11 @@ def test_frontend_contains_every_backend_meter():
     html = (Path(__file__).parents[1] / "public" / "index.html").read_text(encoding="utf-8")
     frontend_keys = tuple(re.findall(r'\{ id:"([^"]+)", group:', html))
     assert frontend_keys == METER_KEYS
-    assert '<span class="month-control"><input type="month" id="exportMonth"></span>' in html
+    assert '<select id="exportMonth" aria-label="选择月份"></select>' in html
     assert ".month-control { position:relative; display:block; width:100%; height:46px;" in html
-    assert "width:100% !important; min-width:100% !important; max-width:100% !important;" in html
+    assert "text-align:center; text-align-last:center;" in html
+    assert 'const firstExportMonth = "2026-08";' in html
+    assert "populateMonthOptions(body.serverTime.slice(0,7));" in html
 
 
 def test_fetch_month_serializes_a_populated_result(monkeypatch):

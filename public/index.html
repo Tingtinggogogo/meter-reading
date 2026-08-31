@@ -38,10 +38,11 @@
     .status.error { color:var(--danger); }
     .history-head { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:end; }
     .admin-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; width:420px; max-width:100%; min-width:0; }
-    .admin-fields label, .admin-fields input { min-width:0; max-width:100%; }
+    .admin-fields label, .admin-fields input, .admin-fields select { min-width:0; max-width:100%; }
     .month-control { position:relative; display:block; width:100%; height:46px; margin-top:7px; overflow:hidden; background:#fff; border:1px solid var(--line); border-radius:6px; }
     .month-control:focus-within { outline:3px solid rgba(0,88,163,.2); border-color:var(--blue); }
-    .month-control input { position:absolute; inset:0; width:100% !important; min-width:100% !important; max-width:100% !important; height:100%; min-height:0; margin:0; border:0; border-radius:0; outline:0; box-sizing:border-box; }
+    .month-control::after { content:""; position:absolute; top:50%; right:16px; z-index:1; border:6px solid transparent; border-top-color:#475467; transform:translateY(-25%); pointer-events:none; }
+    .month-control select { position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0 44px; color:var(--ink); background:#fff; border:0; outline:0; font:inherit; font-weight:700; line-height:46px; text-align:center; text-align-last:center; appearance:none; -webkit-appearance:none; }
     .table-wrap { margin-top:16px; overflow-x:auto; }
     table { width:100%; border-collapse:collapse; font-size:14px; }
     th, td { padding:10px; text-align:left; white-space:nowrap; border-bottom:1px solid #eaecf0; }
@@ -104,7 +105,7 @@
           <span class="hint">管理员密码不会保存到浏览器。</span>
         </div>
         <div class="admin-fields">
-          <label>选择月份<span class="month-control"><input type="month" id="exportMonth"></span></label>
+          <label>选择月份<span class="month-control"><select id="exportMonth" aria-label="选择月份"></select></span></label>
           <label>管理员密码<input type="password" id="adminPassword" autocomplete="current-password"></label>
         </div>
       </div>
@@ -150,6 +151,7 @@
     ];
     const pad = value => String(value).padStart(2,"0");
     const monthNow = () => { const date=new Date(); return `${date.getFullYear()}-${pad(date.getMonth()+1)}`; };
+    const firstExportMonth = "2026-08";
     const escapeHtml = value => { const node=document.createElement("div"); node.textContent=value; return node.innerHTML; };
 
     meters.forEach(meter => {
@@ -163,7 +165,29 @@
     const statusNode=document.getElementById("status");
     const adminStatus=document.getElementById("adminStatus");
     const monthInput=document.getElementById("exportMonth");
-    monthInput.value=monthNow();
+
+    function populateMonthOptions(lastMonth) {
+      const previous=monthInput.value;
+      const [firstYear,firstMonth]=firstExportMonth.split("-").map(Number);
+      const [lastYear,lastMonthNumber]=lastMonth.split("-").map(Number);
+      let year=firstYear;
+      let month=firstMonth;
+      monthInput.replaceChildren();
+      while (year < lastYear || (year === lastYear && month <= lastMonthNumber)) {
+        const value=`${year}-${pad(month)}`;
+        const option=document.createElement("option");
+        option.value=value;
+        option.textContent=`${year}年${month}月`;
+        monthInput.appendChild(option);
+        month+=1;
+        if (month === 13) {
+          month=1;
+          year+=1;
+        }
+      }
+      monthInput.value=previous >= firstExportMonth && previous <= lastMonth ? previous : lastMonth;
+    }
+    populateMonthOptions(monthNow());
 
     function setStatus(node,message,isError=false) {
       node.textContent=message;
@@ -183,6 +207,7 @@
         const {body}=await api("/api/config");
         document.getElementById("site").value=body.site;
         document.getElementById("readingTime").value=body.serverTime.replace("T"," ");
+        populateMonthOptions(body.serverTime.slice(0,7));
       } catch (error) {
         document.getElementById("readingTime").value="服务器连接失败";
         setStatus(statusNode,error.message,true);
