@@ -22,6 +22,8 @@
 ├── app/main.py          # FastAPI、PostgreSQL 和 Excel 导出
 ├── public/index.html    # 移动端网页
 ├── tests/test_app.py    # 数据校验和报表测试
+├── scripts/audit_project.py # 项目交付护栏审计
+├── .github/workflows/ci.yml # PR 和 main 的自动测试与镜像构建
 ├── Dockerfile           # Zeabur 自动识别并构建
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -86,8 +88,20 @@ uvicorn app.main:app --reload
 运行测试：
 
 ```powershell
-pytest -q
+python scripts\audit_project.py
+python -m pytest -q
 ```
+
+## 开发与发布流程
+
+1. 从最新 `main` 创建功能分支，禁止直接向 `main` 提交。
+2. 修改业务规则时同步检查后端配置、页面文案、Excel、测试和 README。
+3. 本地运行项目护栏审计和测试。
+4. 推送分支并创建 Pull Request。
+5. GitHub Actions 的 `test-and-build` 通过后才能合并；它会重复运行审计、14 项回归测试并构建正式 Docker 镜像。
+6. 风险变更先部署到使用独立 PostgreSQL 的 staging 环境验收，再合并到由 Zeabur 监听的生产分支。
+
+仓库长期约束记录在 `.github/copilot-instructions.md`。GitHub 仓库是唯一源码真相，禁止从运行中的容器提取文件重新打包或改变部署方式。
 
 ## 数据与安全
 
