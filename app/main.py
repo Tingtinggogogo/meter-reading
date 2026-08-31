@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import hmac
 import io
 import os
 import re
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from decimal import Decimal
@@ -48,6 +51,7 @@ METERS = (
 )
 METER_KEYS = tuple(item[0] for item in METERS)
 MAX_READING = Decimal("1000000000000000")
+DOWNLOAD_TICKET_TTL_SECONDS = 120
 
 
 class ReadingPayload(BaseModel):
@@ -328,6 +332,7 @@ def build_export_response(month: str) -> Response:
             f"filename*=UTF-8''{quote(filename)}"
         ),
         "Content-Length": str(len(content)),
+        "Content-Transfer-Encoding": "binary",
     }
     return Response(
         content,
@@ -347,6 +352,48 @@ def export_readings_from_form(
     admin_password: Annotated[str, Form()],
 ) -> Response:
     verify_secret(admin_password, "ADMIN_PASSWORD")
+    return build_export_response(month)
+
+
+def sign_download_ticket(month: str, expires: int) -> str:
+    key = os.getenv("ADMIN_PASSWORD", "").encode()
+    if len(key) < 8:
+        raise RuntimeError("ADMIN_PASSWORD must contain at least 8 characters")
+    message = f"{month}:{expires}".encode()
+    digest = hmac.new(key, message, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+def verify_download_ticket(month: str, expires: int, signature: str) -> None:
+    now = int(time.time())
+    if expires < now or expires > now + DOWNLOAD_TICKET_TTL_SECONDS:
+        raise HTTPException(status_code=401, detail="下载链接已过期，请重新导出")
+    expected = sign_download_ticket(month, expires)
+    if not hmac.compare_digest(signature, expected):
+        raise HTTPException(status_code=401, detail="下载链接无效，请重新导出")
+
+
+@app.post("/api/export-ticket", dependencies=[Depends(require_admin)])
+def create_export_ticket(month: Annotated[str, Query()]) -> dict:
+    month_bounds(month)
+    expires = int(time.time()) + DOWNLOAD_TICKET_TTL_SECONDS
+    signature = sign_download_ticket(month, expires)
+    return {
+        "downloadUrl": (
+            f"/api/export-download?month={quote(month)}"
+            f"&expires={expires}&signature={quote(signature)}"
+        )
+    }
+
+
+@app.get("/api/export-download")
+def download_export(
+    month: Annotated[str, Query()],
+    expires: Annotated[int, Query()],
+    signature: Annotated[str, Query()],
+) -> Response:
+    month_bounds(month)
+    verify_download_ticket(month, expires, signature)
     return build_export_response(month)
 
 

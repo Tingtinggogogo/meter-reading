@@ -169,6 +169,41 @@ def test_native_form_export_returns_mobile_friendly_attachment(monkeypatch):
     assert load_workbook(BytesIO(response.content), data_only=True)["每日抄表"]["B4"].value == 3000
 
 
+def test_signed_get_export_returns_android_download(monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin-secret")
+    monkeypatch.setattr(main_module, "fetch_month", lambda _: [sample_record(1)])
+    client = TestClient(main_module.app)
+
+    ticket = client.post(
+        "/api/export-ticket?month=2026-08",
+        headers={"X-Admin-Password": "admin-secret"},
+    )
+    response = client.get(ticket.json()["downloadUrl"])
+
+    assert ticket.status_code == 200
+    assert response.status_code == 200
+    assert response.headers["content-transfer-encoding"] == "binary"
+    assert 'filename="meter-reading-2026-08.xlsx"' in response.headers["content-disposition"]
+    assert load_workbook(BytesIO(response.content), data_only=True)["每日抄表"]["B4"].value == 3000
+
+
+def test_signed_get_export_rejects_tampered_or_expired_ticket(monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin-secret")
+    client = TestClient(main_module.app)
+    expired = int(main_module.time.time()) - 1
+    signature = main_module.sign_download_ticket("2026-08", expired)
+
+    expired_response = client.get(
+        f"/api/export-download?month=2026-08&expires={expired}&signature={signature}"
+    )
+    tampered_response = client.get(
+        f"/api/export-download?month=2026-08&expires={expired + 60}&signature={signature}"
+    )
+
+    assert expired_response.status_code == 401
+    assert tampered_response.status_code == 401
+
+
 def test_qr_print_page_instructs_xiaomi_users_to_use_system_camera():
     response = TestClient(main_module.app).get("/qr")
 

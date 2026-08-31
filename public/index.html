@@ -231,27 +231,12 @@
       const button=document.getElementById("exportButton");
       button.disabled=true;
       try {
-        const {body}=await api(`/api/readings?month=${encodeURIComponent(monthInput.value)}`,{headers:adminHeaders()});
-        if (!body.records.length) throw new Error("所选月份没有记录");
-
-        const form=document.createElement("form");
-        form.method="post";
-        form.action="/api/export";
-        form.style.display="none";
-        [
-          ["month",monthInput.value],
-          ["admin_password",document.getElementById("adminPassword").value]
-        ].forEach(([name,value])=>{
-          const input=document.createElement("input");
-          input.type="hidden";
-          input.name=name;
-          input.value=value;
-          form.appendChild(input);
+        const {body}=await api(`/api/export-ticket?month=${encodeURIComponent(monthInput.value)}`,{
+          method:"POST",
+          headers:adminHeaders()
         });
-        document.body.appendChild(form);
-        form.submit();
-        form.remove();
-        setStatus(adminStatus,"Excel 报表已生成，浏览器正在下载。");
+        setStatus(adminStatus,"验证成功，浏览器正在下载 Excel。");
+        window.location.assign(body.downloadUrl);
       } catch (error) {
         setStatus(adminStatus,error.message,true);
       } finally {
